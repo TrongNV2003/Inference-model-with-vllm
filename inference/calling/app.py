@@ -1,5 +1,4 @@
 import requests
-import json
 
 API_URL = "http://localhost:8000/v1/"
 API_KEY = "your_api_key_here"

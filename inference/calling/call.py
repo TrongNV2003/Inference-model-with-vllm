@@ -1,5 +1,5 @@
-from openai import AsyncOpenAI
 import asyncio
+from openai import AsyncOpenAI
 
 async def main():
     client = AsyncOpenAI(
