@@ -16,11 +16,11 @@ class ChatMessage(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str
     messages: List[ChatMessage]
-    temperature: float = 0.7
+    temperature: float = 0.6
     top_p: float = 0.95
-    top_k: int = 50
+    top_k: int = 20
     max_tokens: int = 1024
-    stop: List[str] = ["</s>", "EOS"]
+    stop: List[str] = ["</s>", "EOS", "<|im_end|>"]
     seed: int = 42
     response_format: Dict[str, str] = None
 

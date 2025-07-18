@@ -24,7 +24,7 @@ class LLMConfig(BaseSettings):
         description="Maximum number of tokens for API responses",
     )
     temperature: float = Field(
-        default=0.7,
+        default=0.6,
         description="Sampling temperature; higher values make output more random",
         alias="TEMPERATURE",
     )
@@ -34,7 +34,7 @@ class LLMConfig(BaseSettings):
         description="Nucleus sampling parameter; higher values increase randomness",
     )
     top_k: int = Field(
-        default=50,
+        default=20,
         alias="TOP_K",
         description="Top-k sampling parameter; higher values increase randomness",
     )
