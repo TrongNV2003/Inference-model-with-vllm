@@ -1,10 +1,13 @@
+import os
 import asyncio
 from openai import AsyncOpenAI
+
+api_key = os.getenv("LLM_KEY")
 
 async def main():
     client = AsyncOpenAI(
         base_url="http://localhost:8000/v1/",
-        api_key="your_api_key_here"
+        api_key=api_key
     )
     system_prompt = "Bạn là trợ lý AI hữu ích."
     prompt = "Giải thích khái niệm học máy."

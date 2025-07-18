@@ -1,10 +1,11 @@
+import os
 import requests
 
-API_URL = "http://localhost:8000/v1/"
-API_KEY = "your_api_key_here"
+api_url = os.getenv("LLM_URL")
+api_key = os.getenv("LLM_KEY")
 
 headers = {
-    "Authorization": f"Bearer {API_KEY}",
+    "Authorization": f"Bearer {api_key}",
     "Content-Type": "application/json"
 }
 
@@ -12,7 +13,7 @@ data = {
     "prompt": "Xin chào, hãy giải thích về AI là gì?"
 }
 
-response = requests.post(API_URL, headers=headers, json=data)
+response = requests.post(api_url, headers=headers, json=data)
 
 if response.status_code == 200:
     results = response.json()
