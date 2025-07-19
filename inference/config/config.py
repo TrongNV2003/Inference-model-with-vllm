@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pydantic import BaseModel
 
 class InferenceRequest(BaseModel):
@@ -23,6 +23,7 @@ class ChatCompletionRequest(BaseModel):
     stop: List[str] = ["</s>", "EOS", "<|im_end|>"]
     seed: int = 42
     response_format: Dict[str, str] = None
+    stream: Optional[bool] = True
 
 class ChatCompletionChoice(BaseModel):
     index: int
