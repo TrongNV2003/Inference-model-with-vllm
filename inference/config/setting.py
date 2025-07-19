@@ -15,11 +15,12 @@ class LLMConfig(BaseSettings):
         alias="LLM_KEY",
     )
     model: str = Field(
+        default="Qwen/Qwen3-4B-AWQ",
         description="Model name to be used with AWQ quantization",
         alias="LLM_MODEL",
     )
     max_tokens: int = Field(
-        default=1024,
+        default=2048,
         alias="MAX_TOKENS",
         description="Maximum number of tokens for API responses",
     )
@@ -39,7 +40,7 @@ class LLMConfig(BaseSettings):
         description="Top-k sampling parameter; higher values increase randomness",
     )
     gpu_memory_utilization: float = Field(
-        default=0.85,
+        default=0.80,
         alias="GPU_MEMORY_UTILIZATION",
         description="GPU memory utilization ratio",
     )
@@ -59,7 +60,7 @@ class LLMConfig(BaseSettings):
         description="Maximum number of sequences to process in parallel",
     )
     stop_tokens: List[str] = Field(
-        default=["</s>", "EOS"],
+        default=["</s>", "EOS", "<|im_end|>"],
         alias="STOP_TOKENS",
         description="Tokens that indicate the end of a sequence",
     )

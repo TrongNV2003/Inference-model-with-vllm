@@ -1,12 +1,14 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
+
 import time
 import json
 import torch
-import asyncio
 import logging
 import uvicorn
 import numpy as np
 from transformers import AutoTokenizer
-from contextlib import asynccontextmanager
 from vllm import AsyncLLMEngine, SamplingParams
 from vllm.engine.arg_utils import AsyncEngineArgs
 from fastapi import FastAPI, HTTPException, Security
@@ -29,42 +31,36 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
-
 app = FastAPI(title="vLLM Inference API")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Quản lý lifecycle của engine"""
-    try:
-        logger.info("Initializing vLLM Async Engine...")
-        engine_args = AsyncEngineArgs(
-            seed=llm_config.seed,
-            model=llm_config.model,
-            quantization="awq",
-            gpu_memory_utilization=llm_config.gpu_memory_utilization,
-            tensor_parallel_size=1,
-            max_model_len=llm_config.max_model_length,
-            max_num_seqs=llm_config.max_num_seqs,
-            max_num_batched_tokens=llm_config.max_num_batched_tokens,
-            enforce_eager=True,  # Tắt graph compilation để ổn định trên 16GB VRAM
-            enable_prefix_caching=True,  # Tăng tốc với prefix caching
-            dtype="float16",
-            kv_cache_dtype="auto",
-        )
-        global engine, tokenizer
-        engine = AsyncLLMEngine.from_engine_args(engine_args)
-        logger.info("Loading tokenizer...")
-        model_path = llm_config.model
-        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=True)
-        logger.info("Tokenizer loaded successfully")
-        logger.info("vLLM Engine initialized successfully")
-        yield
-    finally:
-        logger.info("Shutting down vLLM Engine...")
-        del tokenizer
-        torch.cuda.empty_cache()
+engine_args = AsyncEngineArgs(
+    seed=llm_config.seed,
+    model=llm_config.model,
+    quantization="awq_marlin",
+    gpu_memory_utilization=llm_config.gpu_memory_utilization,
+    tensor_parallel_size=1,
+    max_model_len=llm_config.max_model_length,
+    max_num_seqs=llm_config.max_num_seqs,
+    max_num_batched_tokens=llm_config.max_num_batched_tokens,
+    enforce_eager=False,
+    enable_prefix_caching=True,
+    dtype="float16",
+    device="cuda",
+    kv_cache_dtype="auto",
+    task="generate",
+)
 
-app.lifespan = lifespan
+try:
+    logger.info("Loading engine...")
+    engine = AsyncLLMEngine.from_engine_args(engine_args)
+    
+    logger.info("Loading tokenizer...")
+    tokenizer = AutoTokenizer.from_pretrained(llm_config.model, use_fast=True, trust_remote_code=True)
+    
+    logger.info("vLLM Engine and tokenizer initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize engine or tokenizer: {str(e)}")
+    raise
 
 
 @app.get("/health")
@@ -83,18 +79,16 @@ async def chat_completion(
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
-        prompt = ""
-        for msg in request.messages:
-            if msg.role == "system":
-                prompt += f"System: {msg.content}\n\n"
-            elif msg.role == "user":
-                prompt += f"User: {msg.content}\n"
-            elif msg.role == "assistant":
-                prompt += f"Assistant: {msg.content}\n"
-        prompt += "Assistant: " # Thêm đánh dấu cho phản hồi mới cho LLM trả lời
+        messages_as_dicts = [msg.model_dump() for msg in request.messages]
+        prompt = tokenizer.apply_chat_template(
+            messages_as_dicts,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        logger.info(f"Formatted Prompt: {prompt}")
         
-        prompt_tokens = len(tokenizer.encode(prompt))   # Đếm tokens đầu vào (ước tính)
-        max_tokens = request.max_tokens
+        prompt_tokens = len(tokenizer.encode(prompt))
+        max_tokens = llm_config.max_tokens
         
         if prompt_tokens + max_tokens > llm_config.max_model_length:    # Kiểm tra xem tổng số tokens có vượt quá giới hạn không
             raise HTTPException(status_code=400, detail="Prompt + max_tokens exceeds max_model_len")
@@ -105,13 +99,12 @@ async def chat_completion(
             max_tokens = min(max_tokens, 512)
         
         sampling_params = SamplingParams(
-            seed=request.seed,
+            seed=llm_config.seed,
             temperature=llm_config.temperature,
-            top_p=request.top_p,
-            top_k=request.top_k,
+            top_p=llm_config.top_p,
+            top_k=llm_config.top_k,
             max_tokens=max_tokens,
-            stop=request.stop,
-            seed=request.seed,
+            stop=llm_config.stop_tokens,
             presence_penalty=0.5,
             frequency_penalty=0.5
         )

@@ -15,12 +15,12 @@ async def main():
         seed=42,
         temperature=0.7,
         top_p=0.95,
-        model="Qwen/Qwen3-8B-AWQ",
+        model="Qwen/Qwen3-4B",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
-        response_format={"type": "json_object"}
+        # response_format={"type": "json_object"}
     )
     content = response.choices[0].message.content
     print(content)
