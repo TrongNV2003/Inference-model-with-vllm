@@ -9,3 +9,6 @@ torch==2.7.0
 transformers==4.53.2
 uvicorn==0.35.0
 vllm==0.9.2
+accelerate==1.9.0
+flash-attn==2.8.1
+autoawq==0.2.9
