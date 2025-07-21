@@ -29,4 +29,5 @@ python inference/calling/call.py
 - Check your TORCH_CUDA_ARCH_LIST at [Here](https://developer.nvidia.com/cuda-gpus#compute)
 
 ## Future plans
-- TBD
+- Bổ sung trigger bỏ thinking mode với model Qwen3 (hiện tại default model là True)
+- Bổ sung output json format
