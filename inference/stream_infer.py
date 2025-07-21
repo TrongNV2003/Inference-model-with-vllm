@@ -41,7 +41,7 @@ engine_args = AsyncEngineArgs(
     quantization="awq_marlin",
     gpu_memory_utilization=llm_config.gpu_memory_utilization,
     tensor_parallel_size=1,
-    max_model_len=llm_config.max_model_length,
+    max_model_len=llm_config.max_model_len,
     max_num_seqs=llm_config.max_num_seqs,
     max_num_batched_tokens=llm_config.max_num_batched_tokens,
     enforce_eager=False,
@@ -169,7 +169,7 @@ async def chat_completion(
         prompt_tokens = len(tokenizer.encode(prompt))
         max_tokens = llm_config.max_tokens
         
-        if prompt_tokens + max_tokens > llm_config.max_model_length:    # Kiểm tra xem tổng số tokens có vượt quá giới hạn không
+        if prompt_tokens + max_tokens > llm_config.max_model_len:    # Kiểm tra xem tổng số tokens có vượt quá giới hạn không
             raise HTTPException(status_code=400, detail="Prompt + max_tokens exceeds max_model_len")
         
         available_vram = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1024**3

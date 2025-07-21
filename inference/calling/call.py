@@ -20,7 +20,7 @@ async def main():
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
-        # response_format={"type": "json_object"}
+        response_format={"type": "json_object"}
     )
     content = response.choices[0].message.content
     print(content)

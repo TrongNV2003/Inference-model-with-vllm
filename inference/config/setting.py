@@ -7,17 +7,17 @@ load_dotenv()
 
 class LLMConfig(BaseSettings):
     base_url: str = Field(
-        description="Base URL for OpenAI API",
         alias="LLM_URL",
+        description="Base URL for OpenAI API",
     )
     api_key: str = Field(
-        description="API key for OpenAI",
         alias="LLM_KEY",
+        description="API key for OpenAI",
     )
     model: str = Field(
         default="Qwen/Qwen3-4B-AWQ",
-        description="Model name to be used with AWQ quantization",
         alias="LLM_MODEL",
+        description="Model name to be used with AWQ quantization",
     )
     max_tokens: int = Field(
         default=2048,
@@ -26,8 +26,8 @@ class LLMConfig(BaseSettings):
     )
     temperature: float = Field(
         default=0.6,
-        description="Sampling temperature; higher values make output more random",
         alias="TEMPERATURE",
+        description="Sampling temperature; higher values make output more random",
     )
     top_p: float = Field(
         default=0.95,
@@ -44,10 +44,10 @@ class LLMConfig(BaseSettings):
         alias="GPU_MEMORY_UTILIZATION",
         description="GPU memory utilization ratio",
     )
-    max_model_length: int = Field(
+    max_model_len: int = Field(
         default=4096,
         alias="MAX_MODEL_LENGTH",
-        description="Maximum length of the model input",
+        description="Maximum length of model input tokens and output tokens",
     )
     max_num_batched_tokens: int = Field(
         default=4096,
@@ -63,6 +63,28 @@ class LLMConfig(BaseSettings):
         default=["</s>", "EOS", "<|im_end|>"],
         alias="STOP_TOKENS",
         description="Tokens that indicate the end of a sequence",
+    )
+    quantization: str = Field(
+        default="awq_marlin",
+        alias="QUANTIZATION",
+        description="Quantization method to be used for the model. e.g. if model is AWQ, must use 'awq' or 'awq_marlin'.",
+        examples=["awq", "awq_marlin", "gguf", "bitsandbytes"]
+    )
+    dtype: str = Field(
+        default="float16",
+        alias="DATA_TYPE",
+        description="Data type for model weights and computations",
+    )
+    kv_cache_dtype: str = Field(
+        default="auto",
+        alias="KV_CACHE_DTYPE",
+        description="Data type for key-value cache; 'auto' uses the same dtype as the model",
+    )
+    task: str = Field(
+        default="generate",
+        alias="TASK",
+        description="Task type for the model; currently only 'generate' is supported",
+        examples=["generate", "classify", "embed"]
     )
     seed: int = Field(
         default=42,

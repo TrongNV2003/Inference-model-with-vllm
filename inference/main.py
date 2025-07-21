@@ -36,18 +36,18 @@ app = FastAPI(title="vLLM Inference API")
 engine_args = AsyncEngineArgs(
     seed=llm_config.seed,
     model=llm_config.model,
-    quantization="awq_marlin",
+    task=llm_config.task,
+    quantization=llm_config.quantization,
     gpu_memory_utilization=llm_config.gpu_memory_utilization,
     tensor_parallel_size=1,
-    max_model_len=llm_config.max_model_length,
+    max_model_len=llm_config.max_model_len,
     max_num_seqs=llm_config.max_num_seqs,
     max_num_batched_tokens=llm_config.max_num_batched_tokens,
-    enforce_eager=False,
+    enforce_eager=False,        # Use CUDA graph for performance
     enable_prefix_caching=True,
-    dtype="float16",
+    dtype=llm_config.dtype,
+    kv_cache_dtype=llm_config.kv_cache_dtype,
     device="cuda",
-    kv_cache_dtype="auto",
-    task="generate",
 )
 
 try:
@@ -84,14 +84,28 @@ async def chat_completion(
             messages_as_dicts,
             tokenize=False,
             add_generation_prompt=True,
+            enable_thinking=False,
         )
         logger.info(f"Formatted Prompt: {prompt}")
         
-        prompt_tokens = len(tokenizer.encode(prompt))
-        max_tokens = llm_config.max_tokens
+        if request.response_format and request.response_format.get("type") == "json_object":
+            try:
+                json_instruction = (
+                    "\n\nIMPORTANT: You must provide a response in a valid JSON format. "
+                    "Do not include any other text, explanations, or markdown formatting outside of the JSON object. "
+                    "The JSON object must start with { and end with }."
+                )
+                prompt += json_instruction
+                response_text = json.dumps(json.loads(response_text), ensure_ascii=False)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Model output is not valid JSON")
         
-        if prompt_tokens + max_tokens > llm_config.max_model_length:    # Kiểm tra xem tổng số tokens có vượt quá giới hạn không
-            raise HTTPException(status_code=400, detail="Prompt + max_tokens exceeds max_model_len")
+
+        # Kiểm tra xem tổng số tokens input + output có vượt quá giới hạn max_model_len không
+        max_tokens = llm_config.max_tokens
+        prompt_tokens = len(tokenizer.encode(prompt))
+        if prompt_tokens + max_tokens > llm_config.max_model_len:
+            raise HTTPException(status_code=400, detail="Tokens exceeds max_model_len")
         
         available_vram = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1024**3
         if available_vram < 1:
@@ -108,7 +122,7 @@ async def chat_completion(
             presence_penalty=0.5,
             frequency_penalty=0.5
         )
-
+        
         final_output = None
         async for output in engine.generate(
             prompt=prompt,
@@ -116,20 +130,13 @@ async def chat_completion(
             request_id=str(np.random.randint(1e9))
         ):
             final_output = output
-            
         if final_output is None:
             raise HTTPException(status_code=500, detail="Failed to generate response")
-
         response_text = final_output.outputs[0].text.strip()
+        
         completion_tokens = len(tokenizer.encode(response_text))
 
-        if request.response_format and request.response_format.get("type") == "json_object":
-            try:
-                response_text = json.dumps(json.loads(response_text), ensure_ascii=False)
-            except json.JSONDecodeError:
-                raise HTTPException(status_code=400, detail="Model output is not valid JSON")
-            
-        # Tạo phản hồi theo định dạng OpenAI API
+        # Response in OpenAI API format
         response = ChatCompletionResponse(
             id=f"chatcmpl-{str(np.random.randint(1e9))}",
             created=int(time.time()),
