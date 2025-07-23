@@ -2,6 +2,7 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
 
+import re
 import time
 import json
 import torch
@@ -47,16 +48,19 @@ engine_args = AsyncEngineArgs(
     enable_prefix_caching=True,
     dtype=llm_config.dtype,
     kv_cache_dtype=llm_config.kv_cache_dtype,
-    device="cuda",
+    device="auto",
+    rope_scaling={
+        "type": "yarn",
+        "factor": 4.0,
+        "original_max_position_embeddings": 32768,
+    },
 )
 
 try:
     logger.info("Loading engine...")
     engine = AsyncLLMEngine.from_engine_args(engine_args)
-    
     logger.info("Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(llm_config.model, use_fast=True, trust_remote_code=True)
-    
     logger.info("vLLM Engine and tokenizer initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize engine or tokenizer: {str(e)}")
@@ -89,17 +93,13 @@ async def chat_completion(
         logger.info(f"Formatted Prompt: {prompt}")
         
         if request.response_format and request.response_format.get("type") == "json_object":
-            try:
-                json_instruction = (
-                    "\n\nIMPORTANT: You must provide a response in a valid JSON format. "
-                    "Do not include any other text, explanations, or markdown formatting outside of the JSON object. "
-                    "The JSON object must start with { and end with }."
-                )
-                prompt += json_instruction
-                response_text = json.dumps(json.loads(response_text), ensure_ascii=False)
-            except json.JSONDecodeError:
-                raise HTTPException(status_code=400, detail="Model output is not valid JSON")
-        
+            json_instruction = (
+                "\n\nIMPORTANT: You must provide a response in a valid JSON format. "
+                "Do not include any other text, explanations, or markdown formatting outside of the JSON object. "
+                "The JSON object must start with { and end with }."
+            )
+            prompt += json_instruction
+        logger.info(f"Final Formatted Prompt: {prompt[:300]}...")
 
         # Kiểm tra xem tổng số tokens input + output có vượt quá giới hạn max_model_len không
         max_tokens = llm_config.max_tokens
@@ -132,7 +132,20 @@ async def chat_completion(
             final_output = output
         if final_output is None:
             raise HTTPException(status_code=500, detail="Failed to generate response")
+        
         response_text = final_output.outputs[0].text.strip()
+
+        if request.response_format and request.response_format.get("type") == "json_object":
+            try:
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if not json_match:
+                    raise json.JSONDecodeError("No JSON object found in response", response_text, 0)
+                
+                json_string = json_match.group(0)
+                response_text = json.dumps(json.loads(json_string), ensure_ascii=False)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse model output as JSON. Output: '{response_text}'. Error: {e}")
+                raise HTTPException(status_code=500, detail="Model output is not valid JSON.")
         
         completion_tokens = len(tokenizer.encode(response_text))
 
@@ -157,7 +170,6 @@ async def chat_completion(
                 total_tokens=prompt_tokens + completion_tokens
             )
         )
-        
         return response
 
     except Exception as e:

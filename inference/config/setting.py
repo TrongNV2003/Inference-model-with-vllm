@@ -19,11 +19,6 @@ class LLMConfig(BaseSettings):
         alias="LLM_MODEL",
         description="Model name to be used with AWQ quantization",
     )
-    max_tokens: int = Field(
-        default=2048,
-        alias="MAX_TOKENS",
-        description="Maximum number of tokens for API responses",
-    )
     temperature: float = Field(
         default=0.6,
         alias="TEMPERATURE",
@@ -44,10 +39,16 @@ class LLMConfig(BaseSettings):
         alias="GPU_MEMORY_UTILIZATION",
         description="GPU memory utilization ratio",
     )
+    max_tokens: int = Field(
+        default=2048,
+        alias="MAX_TOKENS",
+        description="Maximum number of tokens for API responses",
+    )
     max_model_len: int = Field(
-        default=4096,
+        default=32768,
         alias="MAX_MODEL_LENGTH",
         description="Maximum length of model input tokens and output tokens",
+        examples=[4096, 32768, 131072]
     )
     max_num_batched_tokens: int = Field(
         default=4096,
