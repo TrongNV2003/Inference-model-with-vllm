@@ -16,7 +16,11 @@ async def main():
         seed=42,
         temperature=0.7,
         top_p=0.95,
-        model="Qwen/Qwen3-4B",
+        max_tokens=2048,
+        frequency_penalty=0.5,
+        presence_penalty=0.5,
+        stop=["</s>", "EOS", "<|im_end|>"],
+        model="Qwen/Qwen3-4B-AWQ",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}

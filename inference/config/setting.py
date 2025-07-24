@@ -45,10 +45,10 @@ class LLMConfig(BaseSettings):
         description="Maximum number of tokens for API responses",
     )
     max_model_len: int = Field(
-        default=32768,
+        default=8192,
         alias="MAX_MODEL_LENGTH",
         description="Maximum length of model input tokens and output tokens",
-        examples=[4096, 32768, 131072]
+        examples=[4096, 8192, 32768, 131072]
     )
     max_num_batched_tokens: int = Field(
         default=4096,
@@ -80,6 +80,16 @@ class LLMConfig(BaseSettings):
         default="auto",
         alias="KV_CACHE_DTYPE",
         description="Data type for key-value cache; 'auto' uses the same dtype as the model",
+    )
+    presence_penalty: float = Field(
+        default=0.5,
+        alias="PRESENCE_PENALTY",
+        description="Penalty for new tokens based on existing ones; higher values discourage repetition",
+    )
+    frequency_penalty: float = Field(
+        default=0.5,
+        alias="FREQUENCY_PENALTY",
+        description="Penalty for new tokens based on their frequency; higher values discourage frequent tokens",
     )
     task: str = Field(
         default="generate",

@@ -44,7 +44,7 @@ engine_args = AsyncEngineArgs(
     max_model_len=llm_config.max_model_len,
     max_num_seqs=llm_config.max_num_seqs,
     max_num_batched_tokens=llm_config.max_num_batched_tokens,
-    enforce_eager=False,        # Use CUDA graph for performance
+    enforce_eager=False,        # Use CUDA graph for performance, may reduce latency
     enable_prefix_caching=True,
     dtype=llm_config.dtype,
     kv_cache_dtype=llm_config.kv_cache_dtype,
@@ -113,14 +113,14 @@ async def chat_completion(
             max_tokens = min(max_tokens, 512)
         
         sampling_params = SamplingParams(
-            seed=llm_config.seed,
-            temperature=llm_config.temperature,
-            top_p=llm_config.top_p,
-            top_k=llm_config.top_k,
-            max_tokens=max_tokens,
-            stop=llm_config.stop_tokens,
-            presence_penalty=0.5,
-            frequency_penalty=0.5
+            seed=request.seed if request.seed is not None else llm_config.seed,
+            temperature=request.temperature if request.temperature is not None else llm_config.temperature,
+            top_p=request.top_p if request.top_p is not None else llm_config.top_p,
+            top_k=request.top_k if request.top_k is not None else llm_config.top_k,
+            max_tokens=request.max_tokens if request.max_tokens is not None else llm_config.max_tokens,
+            stop=request.stop_tokens if request.stop_tokens is not None else llm_config.stop_tokens,
+            presence_penalty=request.presence_penalty if request.presence_penalty is not None else llm_config.presence_penalty,
+            frequency_penalty=request.frequency_penalty if request.frequency_penalty is not None else llm_config.frequency_penalty
         )
         
         final_output = None
