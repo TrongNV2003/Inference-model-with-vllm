@@ -13,19 +13,19 @@ async def main():
     prompt = "Giải thích khái niệm học máy."
     response = await client.chat.completions.create(
         seed=42,
-        temperature=0.6,
-        top_p=0.95,
+        temperature=0.7,
+        top_p=0.8,
         max_tokens=2048,
         frequency_penalty=0.5,
-        presence_penalty=0.5,
+        presence_penalty=1.5,
         stop=["<|im_end|>"],
         model="Qwen/Qwen3-4B-AWQ",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
+        stream=False,
         response_format={"type": "json_object"},
-        stream=False
     )
     content = response.choices[0].message.content
     print(content)
