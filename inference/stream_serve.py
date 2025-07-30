@@ -12,6 +12,7 @@ import numpy as np
 from transformers import AutoTokenizer
 from vllm import AsyncLLMEngine, SamplingParams
 from vllm.engine.arg_utils import AsyncEngineArgs
+from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -32,7 +33,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
-app = FastAPI(title="vLLM Inference API")
+
+app = FastAPI(title="vLLM Streaming Inference API")
 
 engine_args = AsyncEngineArgs(
     seed=llm_config.seed,
@@ -44,7 +46,7 @@ engine_args = AsyncEngineArgs(
     max_model_len=llm_config.max_model_len,
     max_num_seqs=llm_config.max_num_seqs,
     max_num_batched_tokens=llm_config.max_num_batched_tokens,
-    enforce_eager=False,        # Use CUDA graph for performance, may reduce latency
+    enforce_eager=False,    # Use CUDA graph for performance, may reduce latency
     enable_prefix_caching=True,
     dtype=llm_config.dtype,
     kv_cache_dtype=llm_config.kv_cache_dtype,
@@ -59,8 +61,10 @@ engine_args = AsyncEngineArgs(
 try:
     logger.info("Loading engine...")
     engine = AsyncLLMEngine.from_engine_args(engine_args)
+    
     logger.info("Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(llm_config.model, use_fast=True, trust_remote_code=True)
+    
     logger.info("vLLM Engine and tokenizer initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize engine or tokenizer: {str(e)}")
@@ -72,7 +76,83 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+async def stream_generator(prompt: str, sampling_params: SamplingParams, request: ChatCompletionRequest, prompt_tokens: int):
+    """Tạo streaming response cho chat completion"""
+    request_id = f"chatcmpl-{str(np.random.randint(1e9))}"
+    created_time = int(time.time())
+    
+    previous_text = ""
+    
+    first_chunk = {
+        "id": request_id,
+        "object": "chat.completion.chunk",
+        "created": created_time,
+        "model": request.model,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {"role": "assistant", "content": ""},
+                "finish_reason": None
+            }
+        ]
+    }
+    yield f"data: {json.dumps(first_chunk, ensure_ascii=False)}\n\n"
+
+    final_output = None
+    async for output in engine.generate(
+        prompt=prompt,
+        sampling_params=sampling_params,
+        request_id=request_id
+    ):
+        final_output = output
+        current_text = output.outputs[0].text
+        delta_text = current_text[len(previous_text):]
+        previous_text = current_text
+
+        if delta_text:
+            chunk = {
+                "id": request_id,
+                "object": "chat.completion.chunk",
+                "created": created_time,
+                "model": request.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": delta_text},
+                        "finish_reason": None
+                    }
+                ]
+            }
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+    
+    if final_output:
+        completion_tokens = len(tokenizer.encode(final_output.outputs[0].text))
+        finish_reason = final_output.outputs[0].finish_reason
+        
+        final_chunk = {
+            "id": request_id,
+            "object": "chat.completion.chunk",
+            "created": created_time,
+            "model": request.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": finish_reason
+                }
+            ],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens
+            }
+        }
+        yield f"data: {json.dumps(final_chunk, ensure_ascii=False)}\n\n"
+
+    yield "data: [DONE]\n\n"
+
+
+@app.post("/v1/chat/completions")
 async def chat_completion(
     request: ChatCompletionRequest,
     credentials: HTTPAuthorizationCredentials = Security(security)
@@ -88,10 +168,10 @@ async def chat_completion(
             messages_as_dicts,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=False,
+            enable_thinking=request.enable_thinking,
         )
         logger.info(f"Formatted Prompt: {prompt}")
-        
+
         if request.response_format and request.response_format.get("type") == "json_object":
             json_instruction = (
                 "\n\nIMPORTANT: You must provide a response in a valid JSON format. "
@@ -101,7 +181,7 @@ async def chat_completion(
             prompt += json_instruction
         logger.info(f"Final Formatted Prompt: {prompt[:300]}...")
 
-        # Kiểm tra xem tổng số tokens input + output có vượt quá giới hạn max_model_len không
+        # Check if the total number of input + output tokens exceeds the max_model_len limit
         max_tokens = llm_config.max_tokens
         prompt_tokens = len(tokenizer.encode(prompt))
         if prompt_tokens + max_tokens > llm_config.max_model_len:
@@ -113,16 +193,22 @@ async def chat_completion(
             max_tokens = min(max_tokens, 512)
         
         sampling_params = SamplingParams(
-            seed=request.seed if request.seed is not None else llm_config.seed,
-            temperature=request.temperature if request.temperature is not None else llm_config.temperature,
-            top_p=request.top_p if request.top_p is not None else llm_config.top_p,
-            top_k=request.top_k if request.top_k is not None else llm_config.top_k,
-            max_tokens=request.max_tokens if request.max_tokens is not None else llm_config.max_tokens,
-            stop=request.stop_tokens if request.stop_tokens is not None else llm_config.stop_tokens,
-            presence_penalty=request.presence_penalty if request.presence_penalty is not None else llm_config.presence_penalty,
-            frequency_penalty=request.frequency_penalty if request.frequency_penalty is not None else llm_config.frequency_penalty
+            seed=request.seed,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            top_k=request.top_k,
+            min_p=request.min_p,
+            max_tokens=request.max_tokens,
+            stop=request.stop_tokens,
+            presence_penalty=request.presence_penalty,
+            frequency_penalty=request.frequency_penalty,
         )
-        
+        if request.stream:
+            return StreamingResponse(
+                stream_generator(prompt, sampling_params, request, prompt_tokens), 
+                media_type="text/event-stream"
+            )
+
         final_output = None
         async for output in engine.generate(
             prompt=prompt,
@@ -132,7 +218,7 @@ async def chat_completion(
             final_output = output
         if final_output is None:
             raise HTTPException(status_code=500, detail="Failed to generate response")
-        
+
         response_text = final_output.outputs[0].text.strip()
 
         if request.response_format and request.response_format.get("type") == "json_object":
@@ -146,9 +232,9 @@ async def chat_completion(
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse model output as JSON. Output: '{response_text}'. Error: {e}")
                 raise HTTPException(status_code=500, detail="Model output is not valid JSON.")
-        
+            
         completion_tokens = len(tokenizer.encode(response_text))
-
+            
         # Response in OpenAI API format
         response = ChatCompletionResponse(
             id=f"chatcmpl-{str(np.random.randint(1e9))}",
@@ -170,6 +256,7 @@ async def chat_completion(
                 total_tokens=prompt_tokens + completion_tokens
             )
         )
+        
         return response
 
     except Exception as e:

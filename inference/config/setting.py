@@ -20,12 +20,12 @@ class LLMConfig(BaseSettings):
         description="Model name to be used with AWQ quantization",
     )
     temperature: float = Field(
-        default=0.6,
+        default=0.7,
         alias="TEMPERATURE",
         description="Sampling temperature; higher values make output more random",
     )
     top_p: float = Field(
-        default=0.95,
+        default=0.8,
         alias="TOP_P",
         description="Nucleus sampling parameter; higher values increase randomness",
     )
