@@ -5,7 +5,6 @@ os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
 import re
 import time
 import json
-import torch
 import logging
 import uvicorn
 import numpy as np
@@ -15,6 +14,7 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 
 from inference.config.setting import llm_config
 from inference.config.config import (
@@ -182,14 +182,21 @@ async def chat_completion(
         logger.info(f"Final Formatted Prompt: {prompt[:300]}...")
 
         # Check if the total number of input + output tokens exceeds the max_model_len limit
-        max_tokens = llm_config.max_tokens
+        max_tokens = request.max_tokens
         prompt_tokens = len(tokenizer.encode(prompt))
         if prompt_tokens + max_tokens > llm_config.max_model_len:
             raise HTTPException(status_code=400, detail="Tokens exceeds max_model_len")
         
-        available_vram = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1024**3
-        if available_vram < 1:
-            logger.warning("Low VRAM, reducing max_tokens")
+        nvmlInit()
+        handle = nvmlDeviceGetHandleByIndex(0)  # Nếu chỉ dùng GPU 0
+        info = nvmlDeviceGetMemoryInfo(handle)
+        total = info.total / 1024**3
+        used = info.used / 1024**3
+        free = info.free / 1024**3
+        logger.info(f"GPU Memory - Total: {total:.2f} GB, Used: {used:.2f} GB, Free: {free:.2f} GB")
+        available_vram = free
+        if available_vram < 0.5:
+            logger.warning("Low VRAM, reducing max_tokens to 512")
             max_tokens = min(max_tokens, 512)
         
         sampling_params = SamplingParams(
@@ -198,11 +205,12 @@ async def chat_completion(
             top_p=request.top_p,
             top_k=request.top_k,
             min_p=request.min_p,
-            max_tokens=request.max_tokens,
+            max_tokens=max_tokens,
             stop=request.stop_tokens,
             presence_penalty=request.presence_penalty,
             frequency_penalty=request.frequency_penalty,
         )
+        
         if request.stream:
             return StreamingResponse(
                 stream_generator(prompt, sampling_params, request, prompt_tokens), 
