@@ -1,12 +1,15 @@
 import os
 import asyncio
 from openai import AsyncOpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 api_key = os.getenv("LLM_KEY")
 
 async def main():
     client = AsyncOpenAI(
-        base_url="http://localhost:8000/v1/",
+        base_url="http://localhost:5000/v1/",
         api_key=api_key
     )
     system_prompt = "Bạn là trợ lý AI hữu ích."
@@ -26,9 +29,6 @@ async def main():
             {"role": "user", "content": prompt}
         ],
         stream=False,
-        chat_template_kwargs={
-            "enable_thinking": False,
-        },
         response_format={"type": "json_object"},
     )
     content = response.choices[0].message.content

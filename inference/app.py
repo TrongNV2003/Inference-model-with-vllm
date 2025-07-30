@@ -1,3 +1,9 @@
+import os
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 import asyncio
 from loguru import logger
 from fastapi import FastAPI
@@ -29,11 +35,6 @@ async def lifespan(app: FastAPI):
         dtype=llm_config.dtype,
         kv_cache_dtype=llm_config.kv_cache_dtype,
         device="auto",
-        rope_scaling={
-            "type": "yarn",
-            "factor": 2.0, # Scale factor for rope (compression factor), e.g. max_model_len = 32768 *4.0 = 131072 tokens
-            "original_max_position_embeddings": 32768,
-        },
     )
 
     logger.info("Loading engine...")

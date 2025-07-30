@@ -48,7 +48,6 @@ async def chat_completion(
     """OpenAI-compatible chat completion API"""
     engine = fastapi_request.app.state.engine
     tokenizer = fastapi_request.app.state.tokenizer
-    template_kwargs = request.chat_template_kwargs or {}
     
     if credentials.credentials != llm_config.api_key:
         logger.warning("Invalid API key attempt")
@@ -60,7 +59,7 @@ async def chat_completion(
             messages_as_dicts,
             tokenize=False,
             add_generation_prompt=True,
-            **template_kwargs,
+            enable_thinking=False,
         )
         logger.info(f"Formatted Prompt: {prompt}")
 

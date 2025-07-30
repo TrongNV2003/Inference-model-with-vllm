@@ -27,7 +27,6 @@ class ChatCompletionRequest(BaseModel):
     stop_tokens: List[str] = ["</s>", "EOS", "<|im_end|>"]
     response_format: Dict[str, str] = None
     stream: Optional[bool] = True
-    chat_template_kwargs: Optional[Dict[str, Any]] = None
 
 class ChatCompletionChoice(BaseModel):
     index: int
