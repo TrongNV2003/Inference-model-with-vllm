@@ -14,8 +14,8 @@ async def main():
 
     stream_response = await client.chat.completions.create(
         seed=42,
-        temperature=0.7,
-        top_p=0.8,
+        temperature=0.6,
+        top_p=0.95,
         max_tokens=2048,
         frequency_penalty=0.5,
         presence_penalty=1.5,
@@ -26,7 +26,9 @@ async def main():
             {"role": "user", "content": prompt}
         ],
         stream=True,
-        # response_format={"type": "json_object"}
+        chat_template_kwargs={
+            "enable_thinking": True,
+        },
     )
 
     print("AI: ", end="")

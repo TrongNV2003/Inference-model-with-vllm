@@ -11,6 +11,7 @@ async def main():
     )
     system_prompt = "Bạn là trợ lý AI hữu ích."
     prompt = "Giải thích khái niệm học máy."
+    
     response = await client.chat.completions.create(
         seed=42,
         temperature=0.7,
@@ -25,6 +26,9 @@ async def main():
             {"role": "user", "content": prompt}
         ],
         stream=False,
+        chat_template_kwargs={
+            "enable_thinking": False,
+        },
         response_format={"type": "json_object"},
     )
     content = response.choices[0].message.content
