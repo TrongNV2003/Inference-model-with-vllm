@@ -1,6 +1,6 @@
 # Inference Large language models with vLLM
 This repo implements vLLM to self-hosted LLM on your own devices.
-Model usage: Qwen/Qwen3-8B-AWQ
+Model usage: Qwen/Qwen3-4B-AWQ
 Inference device: GPU Nvidia RTX 5060ti 16GB
 
 ## Installation dependancies
@@ -16,10 +16,21 @@ pip install -r requirements.txt
 ## Execution
 Serving LLM with vLLM:
 ```python
-python inference/main.py
+python inference/serve.py
+```
+
+Serving streaming with vLLM:
+```python
+python inference/stream_serve.py
 ```
 
 Call API:
+Calling API after serving:
+```python
+python inference/calling/call.py
+```
+
+Calling API after streaming serving:
 ```python
 python inference/calling/call.py
 ```
@@ -28,6 +39,7 @@ python inference/calling/call.py
 - Check your TORCH_CUDA_ARCH_LIST of GPU at [Here](https://developer.nvidia.com/cuda-gpus#compute)
 - Check config settings RoPE for long Texts at [YaRN](https://huggingface.co/Qwen/Qwen3-4B-AWQ#:~:text=Qwen3%20natively%20supports,the%20YaRN%20method.)
 - Check max context length (max_model_len) of models (Qwen3-4B, Qwen3-8B...) at [Here](https://qwenlm.github.io/blog/qwen3/#advanced-usages:~:text=We%20are%20open,Apache%202.0%20license.)
+- Reference to hyperparameters set for Thinking-mode and Non Thinking-mode of Qwen models from [Qwen](https://huggingface.co/Qwen/Qwen3-4B-AWQ#best-practices)
 
 ## Future plans
 - Bổ sung trigger bỏ thinking mode với model Qwen3 (hiện tại default model là True) (DONE)
