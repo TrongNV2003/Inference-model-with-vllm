@@ -40,23 +40,23 @@ class LLMConfig(BaseSettings):
         description="GPU memory utilization ratio",
     )
     max_tokens: int = Field(
-        default=2048,
+        default=4096,
         alias="MAX_TOKENS",
         description="Maximum number of tokens for API responses",
     )
     max_model_len: int = Field(
-        default=8192,
+        default=16384,
         alias="MAX_MODEL_LENGTH",
-        description="Maximum length of model input tokens and output tokens",
+        description="Maximum length of model input tokens and output tokens, can be larger if use YaRN",
         examples=[4096, 8192, 16384, 32768, 131072]
     )
     max_num_batched_tokens: int = Field(
-        default=4096,
+        default=8192,
         alias="MAX_NUM_BATCHED_TOKENS",
         description="Maximum number of tokens to process in a single batch",
     )
     max_num_seqs: int = Field(
-        default=32,
+        default=4,
         alias="MAX_NUM_SEQS",
         description="Maximum number of sequences to process in parallel",
     )
