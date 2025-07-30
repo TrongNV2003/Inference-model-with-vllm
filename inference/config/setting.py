@@ -48,7 +48,7 @@ class LLMConfig(BaseSettings):
         default=8192,
         alias="MAX_MODEL_LENGTH",
         description="Maximum length of model input tokens and output tokens",
-        examples=[4096, 8192, 32768, 131072]
+        examples=[4096, 8192, 16384, 32768, 131072]
     )
     max_num_batched_tokens: int = Field(
         default=4096,

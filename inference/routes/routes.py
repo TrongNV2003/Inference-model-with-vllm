@@ -6,13 +6,10 @@ import re
 import time
 import json
 import logging
-import uvicorn
 import numpy as np
-from transformers import AutoTokenizer
-from vllm import AsyncLLMEngine, SamplingParams
-from vllm.engine.arg_utils import AsyncEngineArgs
+from vllm import SamplingParams
 from fastapi.responses import StreamingResponse
-from fastapi import FastAPI, HTTPException, Security
+from fastapi import APIRouter, HTTPException, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 
@@ -24,6 +21,7 @@ from inference.config.config import (
     ChatCompletionRequest,
     ChatCompletionResponse,
 )
+router = APIRouter(tags=["vLLM Serving"])
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,57 +32,22 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
-app = FastAPI(title="vLLM Streaming Inference API")
-
-engine_args = AsyncEngineArgs(
-    seed=llm_config.seed,
-    model=llm_config.model,
-    task=llm_config.task,
-    quantization=llm_config.quantization,
-    gpu_memory_utilization=llm_config.gpu_memory_utilization,
-    tensor_parallel_size=1,
-    max_model_len=llm_config.max_model_len,
-    max_num_seqs=llm_config.max_num_seqs,
-    max_num_batched_tokens=llm_config.max_num_batched_tokens,
-    enforce_eager=False,    # Use CUDA graph for performance, may reduce latency
-    enable_prefix_caching=True,
-    dtype=llm_config.dtype,
-    kv_cache_dtype=llm_config.kv_cache_dtype,
-    device="auto",
-    rope_scaling={
-        "type": "yarn",
-        "factor": 4.0,
-        "original_max_position_embeddings": 32768,
-    },
-)
-
 nvmlInit()
-nvml_handle = nvmlDeviceGetHandleByIndex(0)  # Nếu chỉ dùng GPU 0
+nvml_handle = nvmlDeviceGetHandleByIndex(0)  # GPU 0
 
-try:
-    logger.info("Loading engine...")
-    engine = AsyncLLMEngine.from_engine_args(engine_args)
-    
-    logger.info("Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(llm_config.model, use_fast=True, trust_remote_code=True)
-    
-    logger.info("vLLM Engine and tokenizer initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize engine or tokenizer: {str(e)}")
-    raise
-
-
-@app.get("/health")
+@router.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
-
-@app.post("/v1/chat/completions")
+@router.post("/v1/chat/completions")
 async def chat_completion(
+    fastapi_request: Request,
     request: ChatCompletionRequest,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
     """OpenAI-compatible chat completion API"""
+    engine = fastapi_request.app.state.engine
+    tokenizer = fastapi_request.app.state.tokenizer
     template_kwargs = request.chat_template_kwargs or {}
     
     if credentials.credentials != llm_config.api_key:
@@ -98,7 +61,6 @@ async def chat_completion(
             tokenize=False,
             add_generation_prompt=True,
             **template_kwargs,
-
         )
         logger.info(f"Formatted Prompt: {prompt}")
 
@@ -276,17 +238,3 @@ async def chat_completion(
     except Exception as e:
         logger.error(f"Chat completion error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chat completion failed: {str(e)}")
-
-def run_server():
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        log_level="info",
-        timeout_keep_alive=30
-    )
-
-if __name__ == "__main__":
-    import threading
-    server_thread = threading.Thread(target=run_server)
-    server_thread.start()

@@ -1,5 +1,5 @@
-from typing import List, Dict, Optional
 from pydantic import BaseModel
+from typing import List, Dict, Optional, Any
 
 class InferenceRequest(BaseModel):
     prompt: str
@@ -27,7 +27,7 @@ class ChatCompletionRequest(BaseModel):
     stop_tokens: List[str] = ["</s>", "EOS", "<|im_end|>"]
     response_format: Dict[str, str] = None
     stream: Optional[bool] = True
-    enable_thinking: Optional[bool] = False
+    chat_template_kwargs: Optional[Dict[str, Any]] = None
 
 class ChatCompletionChoice(BaseModel):
     index: int

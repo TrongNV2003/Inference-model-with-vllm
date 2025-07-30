@@ -78,6 +78,8 @@ async def chat_completion(
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
     """OpenAI-compatible chat completion API"""
+    template_kwargs = request.chat_template_kwargs or {}
+    
     if credentials.credentials != llm_config.api_key:
         logger.warning("Invalid API key attempt")
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -88,7 +90,7 @@ async def chat_completion(
             messages_as_dicts,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=request.enable_thinking,
+            **template_kwargs
         )
         logger.info(f"Formatted Prompt: {prompt}")
         
