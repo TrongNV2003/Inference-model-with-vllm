@@ -1,6 +1,5 @@
 import os
 import asyncio
-import outlines
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
