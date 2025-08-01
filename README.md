@@ -16,12 +16,7 @@ pip install -r requirements.txt
 ## Execution
 Serving LLM with vLLM:
 ```python
-python inference/serve.py
-```
-
-Serving streaming with vLLM:
-```python
-python inference/stream_serve.py
+python inference/app.py
 ```
 
 Call API:
@@ -32,7 +27,7 @@ python inference/calling/call.py
 
 Calling API after streaming serving:
 ```python
-python inference/calling/call.py
+python inference/calling/stream_call.py
 ```
 
 Quick call:
@@ -71,4 +66,4 @@ Apply YaRN for extend max-model-len for LLM:
 
 ## Future plans
 - Bổ sung trigger bỏ thinking mode với model Qwen3 (hiện tại default model là True) (DONE)
-- Bổ sung output json format
+- Bổ sung output json format (DONE)
