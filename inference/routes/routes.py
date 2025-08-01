@@ -2,16 +2,19 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
 
-import re
 import time
 import json
 import logging
 import numpy as np
 from vllm import SamplingParams
 from fastapi.responses import StreamingResponse
+from jsonschema import validate, ValidationError
 from fastapi import APIRouter, HTTPException, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
+
+from lmformatenforcer import JsonSchemaParser
+from lmformatenforcer.integrations.vllm import build_vllm_logits_processor
 
 from inference.config.setting import llm_config
 from inference.config.config import (
@@ -29,11 +32,18 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
-
 security = HTTPBearer()
+
 
 nvmlInit()
 nvml_handle = nvmlDeviceGetHandleByIndex(0)  # GPU 0
+
+
+DEFAULT_JSON_OBJECT_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": True
+}
 
 @router.get("/health")
 async def health_check():
@@ -62,15 +72,32 @@ async def chat_completion(
             enable_thinking=False,
         )
         logger.info(f"Formatted Prompt: {prompt}")
-
-        if request.response_format and request.response_format.get("type") == "json_object":
-            json_instruction = (
-                "\n\nIMPORTANT: You must provide a response in a valid JSON format. "
-                "Do not include any other text, explanations, or markdown formatting outside of the JSON object. "
-                "The JSON object must start with { and end with }."
-            )
-            prompt += json_instruction
-        logger.info(f"Final Formatted Prompt: {prompt[:300]}...")
+        
+        logits_processors = []
+        schema = None
+        if request.response_format and request.response_format.get("type") == "json_schema":
+            schema = request.response_format.get("json_schema", {}).get("schema")
+            if not schema:
+                raise HTTPException(status_code=400, detail="JSON schema is required for json_schema response format")
+            try:
+                parser = JsonSchemaParser(schema)
+                logits_processor = build_vllm_logits_processor(tokenizer, parser)
+                logits_processors.append(logits_processor)
+                logger.info("Applied JSON schema enforcement with lmformatenforcer")
+            except Exception as e:
+                logger.error(f"Failed to initialize JSON schema parser: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Invalid JSON schema: {str(e)}")
+        
+        elif request.response_format and request.response_format.get("type") == "json_object":
+            schema = DEFAULT_JSON_OBJECT_SCHEMA
+            try:
+                parser = JsonSchemaParser(schema)
+                logits_processor = build_vllm_logits_processor(tokenizer, parser)
+                logits_processors.append(logits_processor)
+                logger.info("Applied default JSON object schema enforcement")
+            except Exception as e:
+                logger.error(f"Failed to initialize JSON parser: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Invalid JSON configuration: {str(e)}")
 
         # Check if the total number of input + output tokens exceeds the max_model_len limit
         max_tokens = request.max_tokens
@@ -96,9 +123,11 @@ async def chat_completion(
             top_k=request.top_k,
             min_p=request.min_p,
             max_tokens=max_tokens,
+            min_tokens=request.min_tokens,
             stop=request.stop_tokens,
             presence_penalty=request.presence_penalty,
             frequency_penalty=request.frequency_penalty,
+            logits_processors= logits_processors if logits_processors else None,
         )
 
         async def model_generator(request_id: str):
@@ -196,14 +225,18 @@ async def chat_completion(
 
             response_text = final_output.outputs[0].text.strip()
 
-            if request.response_format and request.response_format.get("type") == "json_object":
+            if request.response_format and request.response_format.get("type") in ["json_object", "json_schema"]:
                 try:
-                    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-                    if not json_match:
-                        raise json.JSONDecodeError("No JSON object found in response", response_text, 0)
+                    json_response = json.loads(response_text)
+                    if schema and request.response_format.get("type") == "json_schema":
+                        try:
+                            validate(instance=json_response, schema=schema)
+                            logger.info("Model output validated against JSON schema")
+                        except ValidationError as e:
+                            logger.error(f"JSON does not match schema: {str(e)}")
+                            raise HTTPException(status_code=500, detail=f"JSON does not match schema: {str(e)}")
+                    response_text = json.dumps(json_response, ensure_ascii=False)
                     
-                    json_string = json_match.group(0)
-                    response_text = json.dumps(json.loads(json_string), ensure_ascii=False)
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse model output as JSON. Output: '{response_text}'. Error: {e}")
                     raise HTTPException(status_code=500, detail="Model output is not valid JSON.")
@@ -231,7 +264,6 @@ async def chat_completion(
                     total_tokens=prompt_tokens + completion_tokens
                 )
             )
-            
             return response
 
     except Exception as e:

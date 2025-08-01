@@ -22,6 +22,7 @@ class ChatCompletionRequest(BaseModel):
     top_k: int = 20
     min_p: int = 0
     max_tokens: int = 2048
+    min_tokens: Optional[int] = 0
     presence_penalty: float = 0.5
     frequency_penalty: float = 0.5
     stop_tokens: List[str] = ["</s>", "EOS", "<|im_end|>"]

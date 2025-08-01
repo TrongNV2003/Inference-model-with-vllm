@@ -39,12 +39,11 @@ async def lifespan(app: FastAPI):
 
     logger.info("Loading engine...")
     engine = AsyncLLMEngine.from_engine_args(engine_args)
-        
     logger.info("Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(llm_config.model, use_fast=True, trust_remote_code=True)
+    
     app.state.engine = engine
     app.state.tokenizer = tokenizer
-    
     logger.info("vLLM Engine and tokenizer initialized successfully")
 
     yield
