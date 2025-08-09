@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
@@ -37,7 +38,7 @@ async def main():
                             "values": {"type": "array", "items": {"type": "number"}, "description": "Danh sách các giá trị số được trích xuất"},
                             "year": {"type": "array", "items": {"type": "integer"}, "description": "Danh sách các năm tương ứng với các giá trị"},
                             "unit": {"type": "string", "description": "Đơn vị của giá trị (ví dụ: Triệu USD, Sản phẩm)"},
-                            "description": {"type": "string", "description": "Mô tả ngắn về thực thể số"}
+                            "description": {"type": "string", "description": "Mô tả ngắn về thông tin của thực thể số đó (ví dụ: Doanh thu của công ty XYZ)"}
                         },
                         "required": ["name", "values", "year", "unit", "description"],
                         "additionalProperties": False

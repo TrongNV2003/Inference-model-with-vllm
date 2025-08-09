@@ -7,14 +7,12 @@ import json
 import logging
 import numpy as np
 from vllm import SamplingParams
-from fastapi.responses import StreamingResponse
+from vllm.sampling_params import GuidedDecodingParams
 from jsonschema import validate, ValidationError
+from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, HTTPException, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
-
-from lmformatenforcer import JsonSchemaParser
-from lmformatenforcer.integrations.vllm import build_vllm_logits_processor
 
 from inference.config.setting import llm_config
 from inference.config.config import (
@@ -24,6 +22,7 @@ from inference.config.config import (
     ChatCompletionRequest,
     ChatCompletionResponse,
 )
+
 router = APIRouter(tags=["vLLM Serving"])
 
 logging.basicConfig(
@@ -73,31 +72,37 @@ async def chat_completion(
         )
         logger.info(f"Formatted Prompt: {prompt}")
         
-        logits_processors = []
+        guided_decoding_params = None
         schema = None
+        
         if request.response_format and request.response_format.get("type") == "json_schema":
-            schema = request.response_format.get("json_schema", {}).get("schema")
+            json_schema_data = request.response_format.get("json_schema")
+            if json_schema_data:
+                if isinstance(json_schema_data, dict):
+                    schema = json_schema_data.get("schema")
+                elif isinstance(json_schema_data, str):
+                    try:
+                        parsed_schema = json.loads(json_schema_data)
+                        schema = parsed_schema.get("schema")
+                    except json.JSONDecodeError:
+                        schema = None
             if not schema:
                 raise HTTPException(status_code=400, detail="JSON schema is required for json_schema response format")
             try:
-                parser = JsonSchemaParser(schema)
-                logits_processor = build_vllm_logits_processor(tokenizer, parser)
-                logits_processors.append(logits_processor)
-                logger.info("Applied JSON schema enforcement with lmformatenforcer")
+                guided_decoding_params = GuidedDecodingParams(json=schema)
+                logger.info("Applied JSON schema enforcement with guided decoding")
             except Exception as e:
-                logger.error(f"Failed to initialize JSON schema parser: {str(e)}")
+                logger.error(f"Failed to initialize guided decoding with schema: {str(e)}")
                 raise HTTPException(status_code=400, detail=f"Invalid JSON schema: {str(e)}")
         
         elif request.response_format and request.response_format.get("type") == "json_object":
-            schema = DEFAULT_JSON_OBJECT_SCHEMA
             try:
-                parser = JsonSchemaParser(schema)
-                logits_processor = build_vllm_logits_processor(tokenizer, parser)
-                logits_processors.append(logits_processor)
-                logger.info("Applied default JSON object schema enforcement")
+                guided_decoding_params = GuidedDecodingParams(json_object=True)
+                logger.info("Applied JSON object enforcement with guided decoding")
             except Exception as e:
-                logger.error(f"Failed to initialize JSON parser: {str(e)}")
+                logger.error(f"Failed to initialize guided decoding for JSON object: {str(e)}")
                 raise HTTPException(status_code=400, detail=f"Invalid JSON configuration: {str(e)}")
+
 
         # Check if the total number of input + output tokens exceeds the max_model_len limit
         max_tokens = request.max_tokens
@@ -127,7 +132,7 @@ async def chat_completion(
             stop=request.stop_tokens,
             presence_penalty=request.presence_penalty,
             frequency_penalty=request.frequency_penalty,
-            logits_processors= logits_processors if logits_processors else None,
+            guided_decoding=guided_decoding_params,
         )
 
         async def model_generator(request_id: str):

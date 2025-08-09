@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 
 class InferenceRequest(BaseModel):
     prompt: str
@@ -12,6 +12,10 @@ class InferenceResponse(BaseModel):
 class ChatMessage(BaseModel):
     role: str
     content: str
+
+class ResponseFormat(BaseModel):
+    type: str
+    json_schema: Optional[Union[str, Dict[str, Any]]] = None
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -26,7 +30,7 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: float = 0.5
     frequency_penalty: float = 0.5
     stop_tokens: List[str] = ["</s>", "EOS", "<|im_end|>"]
-    response_format: Dict[str, str] = None
+    response_format: Optional[Union[Dict[str, Any], ResponseFormat]] = None
     stream: Optional[bool] = True
 
 class ChatCompletionChoice(BaseModel):
