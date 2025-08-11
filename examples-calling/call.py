@@ -6,14 +6,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 api_key = os.getenv("LLM_KEY")
+base_url = os.getenv("LLM_URL")
 
 async def main():
     client = AsyncOpenAI(
-        base_url="http://localhost:5000/v1/",
+        base_url=base_url,
         api_key=api_key
     )
     system_prompt = "Bạn là trợ lý AI hữu ích."
-    prompt = "Giải thích khái niệm học máy."
+    prompt = "Giải thích khái niệm học máy một cách chi tiết."
     
     response = await client.chat.completions.create(
         seed=42,
